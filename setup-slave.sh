@@ -14,9 +14,32 @@ HOSTNAME=$PRIVATE_DNS  # Fix the bash built-in hostname variable too
 
 echo "Setting up slave on `hostname`..."
 
-# Mount options to use for ext3 and xfs disks (the ephemeral disks
-# are ext3, but we use xfs for EBS volumes to format them faster)
+# Mount options to use for xfs
 XFS_MOUNT_OPTS="defaults,noatime,nodiratime,allocsize=8m"
+
+# Remove the default ephemeral mount from cloud init
+sed -i '/ephemeral/d' /etc/fstab 
+umount /media/ephemeral0/
+rmdir /media/ephemeral0
+
+# Find all ephemeral volumes attached to this instance and mount them
+API_MAPPING_URL=http://169.254.169.254/2012-01-12/meta-data/block-device-mapping
+i=1
+for x in `GET $API_MAPPING_URL |grep ephemeral`; do
+  device=/dev/`GET $API_MAPPING_URL/$x`
+  if [ "$i" == "1" ]; then
+    mount_point=/mnt
+  else
+    mount_point=/mnt$i
+  fi
+  i=$((i + 1))
+  if [[ -e $device && ! -e $mount_point ]]; then
+    mkfs.xfs -f $device
+    mkdir -p $mount_point
+    mount -o $XFS_MOUNT_OPTS $device $mount_point
+    echo "$device $mount_point auto $XFS_MOUNT_OPTS 0 0" >> /etc/fstab
+  fi
+done
 
 # Format and mount EBS volume (/dev/sdv) as /vol if the device exists
 if [[ -e /dev/sdv ]]; then
