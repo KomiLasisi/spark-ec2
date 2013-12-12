@@ -17,27 +17,16 @@ echo "Setting up slave on `hostname`..."
 # Mount options to use for xfs
 XFS_MOUNT_OPTS="defaults,noatime,nodiratime,allocsize=8m"
 
-# Remove the default ephemeral mount from cloud init
-sed -i '/ephemeral/d' /etc/fstab 
-umount /media/ephemeral0/
-rmdir /media/ephemeral0
-
-# Find all ephemeral volumes attached to this instance and mount them
-API_MAPPING_URL=http://169.254.169.254/2012-01-12/meta-data/block-device-mapping
-i=1
-for x in `GET $API_MAPPING_URL |grep ephemeral`; do
-  device=/dev/`GET $API_MAPPING_URL/$x`
-  if [ "$i" == "1" ]; then
-    mount_point=/mnt
-  else
-    mount_point=/mnt$i
-  fi
-  i=$((i + 1))
-  if [[ -e $device && ! -e $mount_point ]]; then
+# Reformat existing mount points as XFS
+yum install -y xfsprogs
+for mnt in `ls / | grep mnt`; do
+  device=$(df /$mnt | tail -n 1 | awk '{ print $1; }')
+  empty=$(ls /$mnt | grep -v lost+found) 
+  if [[ "$empty" == "" ]]; then
+    umount /$mnt
     mkfs.xfs -f $device
-    mkdir -p $mount_point
-    mount -o $XFS_MOUNT_OPTS $device $mount_point
-    echo "$device $mount_point auto $XFS_MOUNT_OPTS 0 0" >> /etc/fstab
+    mount -o $XFS_MOUNT_OPTS $device /$mnt
+    echo "$device /$mnt auto $XFS_MOUNT_OPTS 0 0" >> /etc/fstab
   fi
 done
 
