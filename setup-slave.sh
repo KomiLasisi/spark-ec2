@@ -19,7 +19,7 @@ XFS_MOUNT_OPTS="defaults,noatime,nodiratime,allocsize=8m"
 
 # Reformat existing mount points as XFS
 yum install -y xfsprogs
-for mnt in `ls / | grep mnt`; do
+for mnt in `mount | grep mnt | cut -d " " -f 3`; do
   device=$(df /$mnt | tail -n 1 | awk '{ print $1; }')
   empty=$(ls /$mnt | grep -v lost+found) 
   if [[ "$empty" == "" ]]; then
